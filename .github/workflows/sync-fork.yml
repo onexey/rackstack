@@ -1,0 +1,73 @@
+name: Sync Fork
+
+on:
+  schedule:
+    # Run every day at 6:00 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Use a personal access token if you want to trigger other workflows
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/jazwa/rackstack.git
+
+      - name: Fetch upstream changes
+        run: |
+          git fetch upstream
+
+      - name: Check if upstream has new commits
+        id: check-commits
+        run: |
+          # Get the latest commit from upstream main
+          UPSTREAM_COMMIT=$(git rev-parse upstream/main)
+          # Get the latest commit from origin main
+          ORIGIN_COMMIT=$(git rev-parse origin/main)
+          
+          echo "upstream_commit=$UPSTREAM_COMMIT" >> $GITHUB_OUTPUT
+          echo "origin_commit=$ORIGIN_COMMIT" >> $GITHUB_OUTPUT
+          
+          if [ "$UPSTREAM_COMMIT" != "$ORIGIN_COMMIT" ]; then
+            echo "sync_needed=true" >> $GITHUB_OUTPUT
+            echo "New commits found in upstream"
+          else
+            echo "sync_needed=false" >> $GITHUB_OUTPUT
+            echo "Fork is already up to date"
+          fi
+
+      - name: Sync main branch
+        if: steps.check-commits.outputs.sync_needed == 'true'
+        run: |
+          # Switch to main branch
+          git checkout main
+          
+          # Merge upstream changes
+          git merge upstream/main --no-edit
+          
+          # Push changes to origin
+          git push origin main
+
+      - name: Create summary
+        run: |
+          if [ "${{ steps.check-commits.outputs.sync_needed }}" == "true" ]; then
+            echo "✅ Fork successfully synced with upstream" >> $GITHUB_STEP_SUMMARY
+            echo "- Upstream commit: ${{ steps.check-commits.outputs.upstream_commit }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Previous commit: ${{ steps.check-commits.outputs.origin_commit }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️ Fork is already up to date with upstream" >> $GITHUB_STEP_SUMMARY
+            echo "- Current commit: ${{ steps.check-commits.outputs.origin_commit }}" >> $GITHUB_STEP_SUMMARY
+          fi
