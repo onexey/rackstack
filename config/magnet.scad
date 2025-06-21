@@ -2,7 +2,7 @@ include <./print.scad>
 
 // Dimensions for small cylindrical neodymium magnets that I bought off Amazon
 magnetR = 3;
-magnetH = 2.6;
+magnetH = 2.7;
 
 magnetRSlack = 0.1;
 magnetHSlack = 0.05;
